@@ -1,0 +1,68 @@
+blueprint:
+  name: Sunset / Sunrise Light or Switch
+  description: Turn lights/switches on at sunset or sunrise and off at a specified time
+  domain: automation
+  input:
+    offset_time:
+      name: Offset Time
+      description: Offset relative to Sunrise / Sunset time (e.g. -00:15:00 for 15 min before)
+      default: "00:00:00"
+      selector:
+        time:
+
+    off_time:
+      name: Off Time
+      description: Time at which the entities shall be turned off
+      default: "23:00:00"
+      selector:
+        time:
+
+    target_entities:
+      name: Lights / Switches
+      description: The lights and/or switches to control.
+      selector:
+        target:
+          entity:
+            domain:
+              - light
+              - switch
+              
+    trigger_selector:
+      name: Sunrise / Sunset
+      default: sunset
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: "Sunset"
+              value: "sunset"
+            - label: "Sunrise"
+              value: "sunrise"
+
+trigger:
+  - platform: sun
+    event: !input trigger_selector
+    offset: !input offset_time
+    id: "1"
+  - platform: time
+    at: !input off_time
+    id: "2"
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "1"
+        sequence:
+          - service: homeassistant.turn_on
+            target: !input target_entities
+      - conditions:
+          - condition: trigger
+            id: "2"
+        sequence:
+          - service: homeassistant.turn_off
+            target: !input target_entities
+
+mode: single
