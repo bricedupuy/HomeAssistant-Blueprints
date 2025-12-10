@@ -1024,54 +1024,54 @@ actions:
                       # Use single device (only if device is configured)
                       - conditions: "{{ notify_device != '' }}"
                         sequence:
-                          - device_id: "{{ notify_device }}"
-                            domain: mobile_app
-                            type: notify
-                            title: "{{ title }}"
-                            message: "{{ message }}"
+                          - action: "notify.mobile_app_{{ device_attr(notify_device, 'name') | lower | replace(' ', '_') | replace('-', '_') }}"
                             data:
-                              tag: "{{ notification_tag }}"
-                              group: "{{ group }}"
-                              color: "{{ color }}"
-                              # Android
-                              subject: "{{ subtitle }}"
-                              image: "{{ camera_image if camera_image else omit }}"
-                              clickAction: "{{ tap_action }}"
-                              ttl: 0
-                              priority: high
-                              notification_icon: "{{ icon }}"
-                              sticky: "{{ sticky }}"
-                              channel: "{{ 'alarm_stream' if critical else channel }}"
-                              vibrationPattern: "{{ vibration_pattern }}"
-                              persistent: true
-                              timeout: "{{ notification_timeout }}"
-                              car_ui: "{{ android_auto }}"
-                              # iOS
-                              subtitle: "{{ subtitle }}"
-                              url: "{{ tap_action }}"
-                              attachment:
-                                url: "{{ camera_image }}"
-                              push:
-                                sound:
-                                  name: "{{ sound }}"
-                                  volume: "{{ volume }}"
-                                  critical: "{{ 1 if critical else 0 }}"
-                              entity_id: "{{ ios_live_view if ios_live_view else omit }}"
-                              # Actions
-                              actions:
-                                - action: URI
-                                  title: "{{ button_1 }}"
-                                  uri: "{{ url_1 }}"
-                                  icon: "{{ icon_1 }}"
-                                - action: "{{ 'URI' if '/' in url_2 else url_2 }}"
-                                  title: "{{ button_2 }}"
-                                  uri: "{{ url_2 }}"
-                                  icon: "{{ icon_2 }}"
-                                - action: "{{ 'URI' if '/' in url_3 else url_3 }}"
-                                  title: "{{ button_3 }}"
-                                  uri: "{{ url_3 }}"
-                                  icon: "{{ icon_3 }}"
-                                  destructive: true
+                              title: "{{ title }}"
+                              message: "{{ message }}"
+                              data:
+                                tag: "{{ notification_tag }}"
+                                group: "{{ group }}"
+                                color: "{{ color }}"
+                                # Android
+                                subject: "{{ subtitle }}"
+                                image: "{{ camera_image if camera_image else omit }}"
+                                clickAction: "{{ tap_action }}"
+                                ttl: 0
+                                priority: high
+                                notification_icon: "{{ icon }}"
+                                sticky: "{{ sticky }}"
+                                channel: "{{ 'alarm_stream' if critical else channel }}"
+                                vibrationPattern: "{{ vibration_pattern }}"
+                                persistent: true
+                                timeout: "{{ notification_timeout }}"
+                                car_ui: "{{ android_auto }}"
+                                # iOS
+                                subtitle: "{{ subtitle }}"
+                                url: "{{ tap_action }}"
+                                attachment:
+                                  url: "{{ camera_image }}"
+                                push:
+                                  sound:
+                                    name: "{{ sound }}"
+                                    volume: "{{ volume }}"
+                                    critical: "{{ 1 if critical else 0 }}"
+                                entity_id: "{{ ios_live_view if ios_live_view else omit }}"
+                                # Actions
+                                actions:
+                                  - action: URI
+                                    title: "{{ button_1 }}"
+                                    uri: "{{ url_1 }}"
+                                    icon: "{{ icon_1 }}"
+                                  - action: "{{ 'URI' if '/' in url_2 else url_2 }}"
+                                    title: "{{ button_2 }}"
+                                    uri: "{{ url_2 }}"
+                                    icon: "{{ icon_2 }}"
+                                  - action: "{{ 'URI' if '/' in url_3 else url_3 }}"
+                                    title: "{{ button_3 }}"
+                                    uri: "{{ url_3 }}"
+                                    icon: "{{ icon_3 }}"
+                                    destructive: true
+                            continue_on_error: true
 
               # TV notification
               - if:
