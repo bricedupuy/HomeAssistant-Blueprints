@@ -1,0 +1,525 @@
+blueprint:
+  name: Doorbell Ringed
+  description: Handles doorbell notifications across tablets, phones, TVs, and assistants with volume adjustment based on time of day. All notification methods are optional.
+  domain: automation
+  input:
+    doorbell_trigger:
+      name: Doorbell Trigger
+      description: Input boolean that triggers when doorbell is pressed
+      selector:
+        entity:
+          domain: input_boolean
+
+    # Tablet Settings
+    tablet_enabled:
+      name: Enable Tablet
+      description: Enable Fully Kiosk tablet integration
+      default: false
+      selector:
+        boolean:
+
+    tablet_device:
+      name: Tablet Device
+      description: Fully Kiosk tablet device to show doorbell view (leave empty if not using)
+      default: ""
+      selector:
+        text:
+
+    tablet_screen_switch:
+      name: Tablet Screen Switch
+      description: Switch to turn on tablet screen (optional)
+      default: ""
+      selector:
+        entity:
+          domain: switch
+
+    doorbell_dashboard:
+      name: Doorbell Dashboard Path
+      description: Dashboard path for doorbell view
+      default: /lovelace/doorbell
+      selector:
+        text:
+
+    ha_url:
+      name: Home Assistant URL
+      description: Your Home Assistant URL (used for tablet and camera URLs)
+      default: http://homeassistant.local:8123
+      selector:
+        text:
+
+    # Volume Settings
+    volume_control_enabled:
+      name: Enable Volume Control
+      description: Adjust media player volume when doorbell rings
+      default: false
+      selector:
+        boolean:
+
+    media_players:
+      name: Media Players for Volume Control
+      description: Assistants to adjust volume on
+      default: []
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
+    day_volume:
+      name: Daytime Volume
+      description: Volume level when sun is above horizon
+      default: 0.75
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    night_volume:
+      name: Nighttime Volume
+      description: Volume level when sun is below horizon
+      default: 0.6
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+    # Phone Notification Settings
+    phone_notify_enabled:
+      name: Enable Phone Notifications
+      description: Send notifications to phones
+      default: false
+      selector:
+        boolean:
+
+    phone_notify_service:
+      name: Phone Notification Service
+      description: Notification service for phones (e.g., notify.mobile_app_phone)
+      default: ""
+      selector:
+        text:
+
+    phone_notification_title:
+      name: Phone Notification Title
+      default: Doorbell ringing
+      selector:
+        text:
+
+    phone_notification_message:
+      name: Phone Notification Message
+      default: Someone rang the doorbell, please answer.
+      selector:
+        text:
+
+    phone_notification_channel:
+      name: Phone Notification Channel
+      description: Android notification channel name
+      default: Doorbell
+      selector:
+        text:
+
+    phone_include_image:
+      name: Include Camera Image
+      description: Include camera snapshot in phone notification
+      default: false
+      selector:
+        boolean:
+
+    phone_camera_entity:
+      name: Phone Camera Entity
+      description: Camera entity for phone notification image
+      default: ""
+      selector:
+        entity:
+          domain: camera
+
+    phone_include_actions:
+      name: Include Action Buttons
+      description: Include Answer/Ignore action buttons
+      default: true
+      selector:
+        boolean:
+
+    phone_vibration_pattern:
+      name: Vibration Pattern
+      description: Vibration pattern for phone notification
+      default: "1000, 100, 1000, 100, 1000, 100"
+      selector:
+        text:
+
+    phone_notification_timeout:
+      name: Notification Timeout
+      description: Seconds until notification auto-dismisses (0 = never)
+      default: 120
+      selector:
+        number:
+          min: 0
+          max: 600
+          mode: box
+
+    # TV Notification Settings
+    tv_notify_enabled:
+      name: Enable TV Notifications
+      description: Send notifications to TVs
+      default: false
+      selector:
+        boolean:
+
+    tv_notify_service:
+      name: TV Notification Service
+      description: Notification service for TVs (e.g., notify.all_tvs)
+      default: ""
+      selector:
+        text:
+
+    tv_notification_title:
+      name: TV Notification Title
+      default: Doorbell
+      selector:
+        text:
+
+    tv_notification_message:
+      name: TV Notification Message
+      default: Someone rang the doorbell.
+      selector:
+        text:
+
+    tv_include_image:
+      name: Include Camera on TV
+      description: Show camera feed on TV notification
+      default: false
+      selector:
+        boolean:
+
+    tv_camera_url:
+      name: TV Camera URL
+      description: Direct URL to camera stream/snapshot for TV
+      default: ""
+      selector:
+        text:
+
+    tv_notification_duration:
+      name: TV Notification Duration
+      description: Seconds to show TV notification
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 60
+          mode: slider
+
+    # Assistant Notification Settings
+    assistant_notify_enabled:
+      name: Enable Assistant Announcements
+      description: Announce on smart assistants/speakers
+      default: false
+      selector:
+        boolean:
+
+    assistant_notify_service:
+      name: Assistant Notification Service
+      description: Notification service for assistants (e.g., notify.alexa_media)
+      default: ""
+      selector:
+        text:
+
+    assistant_message:
+      name: Assistant Announcement Message
+      default: Someone rang the doorbell, please answer.
+      selector:
+        text:
+
+    # Ringtone Settings
+    ringtone_enabled:
+      name: Enable Ringtone
+      description: Play ringtone on a media player
+      default: false
+      selector:
+        boolean:
+
+    ringtone_player:
+      name: Ringtone Media Player
+      description: Media player to play ringtone on
+      default: ""
+      selector:
+        entity:
+          domain: media_player
+
+    ringtone_url:
+      name: Ringtone URL
+      description: URL of ringtone audio file
+      default: ""
+      selector:
+        text:
+
+    do_not_disturb:
+      name: Do Not Disturb Toggle
+      description: Input boolean for do not disturb mode (optional - leave empty to ignore)
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+
+    max_rings:
+      name: Maximum Rings
+      description: Maximum number of times to play ringtone
+      default: 6
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+
+    ring_interval:
+      name: Ring Interval
+      description: Seconds between ringtone plays
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          mode: box
+
+    # General Settings
+    initial_delay:
+      name: Initial Delay
+      description: Seconds to wait before playing ringtone loop
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 30
+          mode: box
+
+    cooldown_seconds:
+      name: Cooldown Period
+      description: Seconds to wait after automation to prevent button spam
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 120
+          mode: box
+
+mode: single
+max_exceeded: silent
+
+variables:
+  tablet_enabled: !input tablet_enabled
+  tablet_device: !input tablet_device
+  tablet_screen_switch: !input tablet_screen_switch
+  volume_control_enabled: !input volume_control_enabled
+  phone_notify_enabled: !input phone_notify_enabled
+  phone_notify_service: !input phone_notify_service
+  phone_include_image: !input phone_include_image
+  phone_camera_entity: !input phone_camera_entity
+  phone_include_actions: !input phone_include_actions
+  tv_notify_enabled: !input tv_notify_enabled
+  tv_notify_service: !input tv_notify_service
+  tv_include_image: !input tv_include_image
+  tv_camera_url: !input tv_camera_url
+  assistant_notify_enabled: !input assistant_notify_enabled
+  assistant_notify_service: !input assistant_notify_service
+  ringtone_enabled: !input ringtone_enabled
+  ringtone_player: !input ringtone_player
+  do_not_disturb: !input do_not_disturb
+  max_rings: !input max_rings
+  doorbell_trigger: !input doorbell_trigger
+  doorbell_dashboard: !input doorbell_dashboard
+  ha_url: !input ha_url
+
+trigger:
+  - platform: state
+    entity_id: !input doorbell_trigger
+    to: "on"
+
+action:
+  # Load tablet URL if enabled
+  - if:
+      - condition: template
+        value_template: "{{ tablet_enabled and tablet_device != '' }}"
+    then:
+      - action: fully_kiosk.load_url
+        data:
+          url: "{{ ha_url }}{{ doorbell_dashboard }}"
+        target:
+          device_id: "{{ tablet_device }}"
+        continue_on_error: true
+
+  # Volume control if enabled
+  - if:
+      - condition: template
+        value_template: "{{ volume_control_enabled }}"
+    then:
+      - if:
+          - condition: state
+            entity_id: sun.sun
+            state: below_horizon
+        then:
+          - action: media_player.volume_set
+            data:
+              volume_level: !input night_volume
+            target:
+              entity_id: !input media_players
+            continue_on_error: true
+        else:
+          - action: media_player.volume_set
+            data:
+              volume_level: !input day_volume
+            target:
+              entity_id: !input media_players
+            continue_on_error: true
+
+  # Parallel notifications
+  - parallel:
+      # Phone notification
+      - if:
+          - condition: template
+            value_template: "{{ phone_notify_enabled and phone_notify_service != '' }}"
+        then:
+          - action: "{{ phone_notify_service }}"
+            data:
+              message: !input phone_notification_message
+              title: !input phone_notification_title
+              data: >
+                {% set data = namespace(result={}) %}
+                {% set base = {
+                  'clickAction': doorbell_dashboard,
+                  'group': 'doorbell-ringing',
+                  'tag': 'doorbell-ringing',
+                  'channel': channel,
+                  'importance': 'high',
+                  'priority': 'high',
+                  'ttl': 0,
+                  'vibrationPattern': vibration,
+                  'persistent': true,
+                  'timeout': timeout,
+                  'visibility': 'public'
+                } %}
+                {% set data.result = base %}
+                {% if phone_include_image and phone_camera_entity != '' %}
+                  {% set data.result = dict(data.result, **{'image': '/api/camera_proxy/' ~ phone_camera_entity}) %}
+                {% endif %}
+                {% if phone_include_actions %}
+                  {% set actions = [
+                    {'action': 'URI', 'title': 'Answer', 'uri': doorbell_dashboard},
+                    {'action': 'IGNORE', 'title': 'Ignore'}
+                  ] %}
+                  {% set data.result = dict(data.result, **{'actions': actions}) %}
+                {% endif %}
+                {{ data.result }}
+            variables:
+              channel: !input phone_notification_channel
+              vibration: !input phone_vibration_pattern
+              timeout: !input phone_notification_timeout
+            continue_on_error: true
+
+      # TV notification
+      - if:
+          - condition: template
+            value_template: "{{ tv_notify_enabled and tv_notify_service != '' }}"
+        then:
+          - action: "{{ tv_notify_service }}"
+            data:
+              title: !input tv_notification_title
+              message: !input tv_notification_message
+              data: >
+                {% set data = namespace(result={
+                  'fontsize': 'max',
+                  'transparency': '0%',
+                  'duration': duration,
+                  'interrupt': 0,
+                  'color': 'black'
+                }) %}
+                {% if tv_include_image and tv_camera_url != '' %}
+                  {% set data.result = dict(data.result, **{'image': {'url': tv_camera_url}}) %}
+                {% endif %}
+                {{ data.result }}
+            variables:
+              duration: !input tv_notification_duration
+            continue_on_error: true
+
+      # Assistant announcement
+      - if:
+          - condition: template
+            value_template: "{{ assistant_notify_enabled and assistant_notify_service != '' }}"
+        then:
+          - action: "{{ assistant_notify_service }}"
+            data:
+              message: !input assistant_message
+            continue_on_error: true
+
+  # Turn on tablet screen if configured
+  - if:
+      - condition: template
+        value_template: "{{ tablet_screen_switch != '' }}"
+    then:
+      - action: switch.turn_on
+        target:
+          entity_id: "{{ tablet_screen_switch }}"
+        continue_on_error: true
+
+  # Initial delay before ringtone
+  - delay:
+      seconds: !input initial_delay
+
+  # Ringtone loop if enabled
+  - if:
+      - condition: template
+        value_template: "{{ ringtone_enabled and ringtone_player != '' }}"
+    then:
+      - if:
+          - condition: template
+            value_template: "{{ do_not_disturb == '' }}"
+        then:
+          - repeat:
+              while:
+                - condition: state
+                  entity_id: !input doorbell_trigger
+                  state: "on"
+                - condition: template
+                  value_template: "{{ repeat.index <= max_rings }}"
+              sequence:
+                - action: media_player.play_media
+                  data:
+                    media_content_id: !input ringtone_url
+                    media_content_type: audio/mp3
+                  target:
+                    entity_id: "{{ ringtone_player }}"
+                  continue_on_error: true
+                - delay:
+                    seconds: !input ring_interval
+        else:
+          - if:
+              - condition: template
+                value_template: "{{ states(do_not_disturb) == 'off' }}"
+            then:
+              - repeat:
+                  while:
+                    - condition: state
+                      entity_id: !input doorbell_trigger
+                      state: "on"
+                    - condition: template
+                      value_template: "{{ repeat.index <= max_rings }}"
+                  sequence:
+                    - action: media_player.play_media
+                      data:
+                        media_content_id: !input ringtone_url
+                        media_content_type: audio/mp3
+                      target:
+                        entity_id: "{{ ringtone_player }}"
+                      continue_on_error: true
+                    - delay:
+                        seconds: !input ring_interval
+
+  # Reset doorbell trigger
+  - action: input_boolean.turn_off
+    target:
+      entity_id: !input doorbell_trigger
+
+  # Cooldown to prevent spam
+  - alias: Wait some time to avoid button spamming
+    delay:
+      seconds: !input cooldown_seconds
