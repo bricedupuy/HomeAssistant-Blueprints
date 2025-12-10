@@ -1,650 +1,1127 @@
-# Doorbell Notification Blueprint
-
-A comprehensive Home Assistant blueprint for doorbell notifications with support for mobile devices, TVs, smart assistants, tablets, and ringtone playback.
-
-## Table of Contents
-
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Initial Setup](#initial-setup)
-  - [Creating Required Helpers](#creating-required-helpers)
-  - [Creating Optional Helpers](#creating-optional-helpers)
-  - [Setting Up Notification Groups](#setting-up-notification-groups)
-- [Configuration](#configuration)
-  - [Required Settings](#required-settings)
-  - [Mobile Notifications](#mobile-notifications)
-  - [TV Notifications](#tv-notifications)
-  - [Assistant Announcements](#assistant-announcements)
-  - [Tablet Display](#tablet-display)
-  - [Volume Control](#volume-control)
-  - [Ringtone](#ringtone)
-  - [Filters & Conditions](#filters--conditions)
-  - [Custom Actions](#custom-actions)
-- [How It Works](#how-it-works)
-- [Troubleshooting](#troubleshooting)
-- [Examples](#examples)
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| 📱 **Mobile Notifications** | Rich notifications with camera snapshots, action buttons, and critical alerts |
-| 📺 **TV Notifications** | Overlay notifications on Android/Fire TV |
-| 🔊 **Assistant Announcements** | TTS announcements via Google Assistant, Alexa, etc. |
-| 🖥️ **Tablet Display** | Automatically load doorbell view on Fully Kiosk tablets |
-| 🎵 **Ringtone Playback** | Play ringtone on media players with configurable loop |
-| 🔇 **Do Not Disturb** | Suppress ringtone while still sending notifications |
-| 🎚️ **Volume Control** | Automatic volume adjustment based on time of day |
-| ⏸️ **Silence Button** | Temporarily disable notifications from the notification itself |
-| 🎯 **Smart Filters** | Filter by presence, time, entity state, and cooldown |
-| ⚡ **Custom Actions** | Run any automation when doorbell rings |
-
----
-
-## Requirements
-
-### Minimum Versions
-
-| Component | Minimum Version |
-|-----------|-----------------|
-| Home Assistant | 2024.1.0 |
-| iOS Companion App | 2024.1 |
-| Android Companion App | 2024.1 |
-
-### Required Integrations
-
-- **Mobile App** - For phone notifications ([Documentation](https://companion.home-assistant.io/))
-
-### Optional Integrations
-
-| Integration | Required For |
-|-------------|--------------|
-| [Fully Kiosk Browser](https://www.home-assistant.io/integrations/fully_kiosk/) | Tablet display |
-| [Android TV](https://www.home-assistant.io/integrations/androidtv/) / [Fire TV](https://www.home-assistant.io/integrations/nfandroidtv/) | TV notifications |
-| [Google Assistant](https://www.home-assistant.io/integrations/google_assistant/) / [Alexa Media Player](https://github.com/alandtse/alexa_media_player) | Voice announcements |
-| Any camera integration | Snapshot in notifications |
-
----
-
-## Installation
-
-### Method 1: Import Button
-
-[![Open your Home Assistant instance and show the blueprint import dialog with this blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=YOUR_BLUEPRINT_URL_HERE)
-
-### Method 2: Manual Installation
-
-1. Download the blueprint YAML file
-2. Place it in your `config/blueprints/automation/` directory
-3. Restart Home Assistant or reload automations
-
----
-
-## Initial Setup
-
-### Creating Required Helpers
-
-The blueprint requires an `input_boolean` to trigger doorbell events. This is typically set by your doorbell device or integration.
-
-#### Via UI
-
-1. Go to **Settings** → **Devices & Services** → **Helpers**
-2. Click **+ Create Helper**
-3. Select **Toggle**
-4. Configure:
-   - **Name:** `Doorbell Calling`
-   - **Icon:** `mdi:doorbell` (optional)
-5. Click **Create**
-
-#### Via YAML
-
-Add to your `configuration.yaml`:
-```yaml
-input_boolean:
-  doorbell_calling:
-    name: Doorbell Calling
-    icon: mdi:doorbell
-```
-
-#### Connecting to Your Doorbell
-
-You need an automation to set this input_boolean when your doorbell is pressed. Here are examples for common doorbells:
-
-**Ring Doorbell:**
-```yaml
-automation:
-  - alias: "Ring Doorbell Pressed"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.front_door_ding
-        to: "on"
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.doorbell_calling
-```
-
-**Frigate Doorbell Event:**
-```yaml
-automation:
-  - alias: "Frigate Doorbell Pressed"
-    trigger:
-      - platform: mqtt
-        topic: frigate/events
-        value_template: "{{ value_json['after']['label'] }}"
-        payload: "doorbell"
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.doorbell_calling
-```
-
-**ESPHome Doorbell:**
-```yaml
-automation:
-  - alias: "ESPHome Doorbell Pressed"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.doorbell_button
-        to: "on"
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.doorbell_calling
-```
-
-**Generic Zigbee/Z-Wave Button:**
-```yaml
-automation:
-  - alias: "Zigbee Doorbell Pressed"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.doorbell_button
-        to: "on"
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.doorbell_calling
-```
-
-### Creating Optional Helpers
-
-#### Do Not Disturb Toggle
-
-Create a toggle to suppress ringtone playback while still sending notifications.
-
-**Via UI:**
-1. **Settings** → **Devices & Services** → **Helpers** → **+ Create Helper** → **Toggle**
-2. Configure:
-   - **Name:** `Do Not Disturb`
-   - **Icon:** `mdi:bell-off`
-
-**Via YAML:**
-```yaml
-input_boolean:
-  do_not_disturb:
-    name: Do Not Disturb
-    icon: mdi:bell-off
-```
-
-#### Critical Notifications Toggle
-
-Create a toggle to enable/disable critical notifications dynamically.
-
-**Via UI:**
-1. **Settings** → **Devices & Services** → **Helpers** → **+ Create Helper** → **Toggle**
-2. Configure:
-   - **Name:** `Doorbell Critical Notifications`
-   - **Icon:** `mdi:alert`
-
-**Via YAML:**
-```yaml
-input_boolean:
-  doorbell_critical:
-    name: Doorbell Critical Notifications
-    icon: mdi:alert
-```
-
-Then use this template in the blueprint's Critical Notification setting:
-```yaml
-{{ is_state('input_boolean.doorbell_critical', 'on') }}
-```
-
-### Setting Up Notification Groups
-
-To notify multiple devices at once, create a notification group.
-
-#### Via YAML
-
-Add to your `configuration.yaml`:
-```yaml
-notify:
-  - platform: group
-    name: all_phones
-    services:
-      - service: mobile_app_phone_1
-      - service: mobile_app_phone_2
-      - service: mobile_app_tablet
-
-  - platform: group
-    name: all_tvs
-    services:
-      - service: living_room_tv
-      - service: bedroom_tv
-
-  - platform: group
-    name: all_devices
-    services:
-      - service: mobile_app_phone_1
-      - service: mobile_app_phone_2
-      - service: living_room_tv
-```
-
-After adding, restart Home Assistant.
-
-#### Finding Your Device Service Names
-
-1. Go to **Developer Tools** → **Services**
-2. Search for `notify.mobile_app`
-3. Your devices will appear as `notify.mobile_app_<device_name>`
-
----
-
-## Configuration
-
-### Required Settings
-
-| Setting | Description | Example |
-|---------|-------------|---------|
-| **Doorbell Trigger** | The input_boolean that triggers doorbell events | `input_boolean.doorbell_calling` |
-
-### Mobile Notifications
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Mobile Device** | Device to receive notifications (required even if using group) | - |
-| **Notification Group** | Group name to override single device | `""` |
-| **Base URL** | Your HA external URL (required for images on Android) | `""` |
-| **Doorbell Dashboard Path** | Path to open when tapping notification | `/lovelace/doorbell` |
-
-#### Notification Content
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Title** | Notification title | `Doorbell` |
-| **Message** | Notification message (supports templates) | `Someone rang the doorbell...` |
-| **Subtitle** | Secondary heading | `""` |
-| **Color** | Android/TV notification color | `#ff9800` |
-| **Icon** | Android notification icon | `mdi:doorbell` |
-
-#### Notification Behavior
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Critical** | Bypass DND/silent mode (template supported) | `false` |
-| **Alert Once** | Only first notification plays sound | `false` |
-| **Sound** | iOS notification sound | `default` |
-| **Volume** | iOS sound volume (0-100) | `100` |
-| **Channel** | Android notification channel | `doorbell` |
-| **Sticky** | Android: keep notification after tap | `true` |
-| **Android Auto** | Show on Android Auto | `false` |
-| **Timeout** | Auto-dismiss after seconds (0 = never) | `120` |
-
-#### Action Buttons
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Tap Action** | URL when tapping notification | `/lovelace/doorbell` |
-| **Button 1** | First button text | `Answer` |
-| **URL 1** | First button action | `/lovelace/doorbell` |
-| **Button 2** | Second button text | `Ignore` |
-| **URL 2** | Second button action | `dismiss-{{ this.entity_id }}` |
-| **Button 3** | Third button text | `Silence 30min` |
-| **URL 3** | Third button action | `silence-{{ this.entity_id }}` |
-
-### TV Notifications
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable TV Notifications** | Turn on/off TV notifications | `false` |
-| **TV Notification Service** | Notify service name | `""` |
-| **Position** | Notification position | `center` |
-| **Size** | Notification size | `large` |
-| **Duration** | Display duration in seconds | `15` |
-| **Transparency** | Background transparency | `0%` |
-| **Interrupt** | Interactive notification (may pause playback) | `false` |
-
-### Assistant Announcements
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable Assistant** | Turn on/off announcements | `false` |
-| **Assistant Service** | Notify service name | `""` |
-| **Message** | TTS message | `Someone rang the doorbell...` |
-
-### Tablet Display
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable Tablet** | Turn on/off tablet integration | `false` |
-| **Tablet Device** | Fully Kiosk device | `""` |
-| **Screen Switch** | Switch to turn on screen | `""` |
-
-### Volume Control
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable Volume Control** | Turn on/off volume adjustment | `false` |
-| **Media Players** | Players to adjust | `[]` |
-| **Day Volume** | Volume when sun is up | `0.75` |
-| **Night Volume** | Volume when sun is down | `0.60` |
-
-### Ringtone
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Enable Ringtone** | Turn on/off ringtone playback | `false` |
-| **Media Player** | Player to use for ringtone | `""` |
-| **Ringtone URL** | URL to audio file | `""` |
-| **Max Plays** | Maximum loop iterations | `6` |
-| **Interval** | Seconds between plays | `5` |
-
-### Filters & Conditions
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Do Not Disturb** | Entity to suppress ringtone | `""` |
-| **Presence Filter** | Entities that must not be "home" | `[]` |
-| **State Filter Enabled** | Enable state-based filtering | `false` |
-| **State Filter Entity** | Entity to check | `""` |
-| **State Filter States** | Required states | `[]` |
-| **Time Filter** | Hours to disable notifications | `[]` |
-| **Cooldown** | Minimum seconds between triggers | `15` |
-| **Silence Timer** | Minutes to silence when button pressed | `30` |
-| **Initial Delay** | Seconds before ringtone starts | `5` |
-
-### Custom Actions
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Custom Action (Auto)** | Runs automatically on doorbell | `[]` |
-| **Custom Action (Manual)** | Runs when custom button pressed | `[]` |
-
----
-
-## How It Works
-
-### Flow Diagram
-```
-┌─────────────────┐
-│ Doorbell Pressed│
-│ (Trigger ON)    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Check Filters   │
-│ • Cooldown      │
-│ • Time          │
-│ • Presence      │
-│ • State         │
-└────────┬────────┘
-         │ Pass
-         ▼
-┌─────────────────┐
-│ Preparation     │
-│ • Load tablet   │
-│ • Set volume    │
-│ • Custom action │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Send Parallel   │
-│ • Mobile        │
-│ • TV            │
-│ • Assistant     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Ringtone Loop   │
-│ (if DND off)    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Reset Trigger   │
-│ (Turn OFF)      │
-└─────────────────┘
-```
-
-### Notification Actions
-
-| Button | Action | Effect |
-|--------|--------|--------|
-| **Answer** | Opens URI | Navigates to doorbell dashboard |
-| **Ignore/Dismiss** | Dismisses notification | Clears notification |
-| **Silence** | Triggers automation event | Disables automation for X minutes |
-
-### Ringtone Behavior
-
-1. Waits for **Initial Delay** seconds
-2. Checks if **Do Not Disturb** is OFF
-3. Loops while:
-   - Doorbell trigger is still ON
-   - Loop count < **Max Plays**
-4. Plays ringtone, waits **Interval** seconds
-5. Repeats until conditions fail
-
----
-
-## Troubleshooting
-
-### Notifications Not Received
-
-1. **Check Mobile App Connection**
-   - Open Home Assistant Companion App
-   - Go to Settings → Companion App → Notifications
-   - Tap "Send Test Notification"
-
-2. **Check Notification Group**
-   - Go to Developer Tools → Services
-   - Find your `notify.` service
-   - Try sending a test notification
-
-3. **Check Base URL**
-   - Required for Android images
-   - Must include `http://` or `https://`
-   - Must be accessible from your phone
-
-### Images Not Showing
-
-1. **Android:** Ensure Base URL is set and accessible externally
-2. **iOS:** Check camera entity is valid
-3. **Both:** Verify camera is working in HA dashboard
-
-### Ringtone Not Playing
-
-1. Check media player entity is correct
-2. Verify ringtone URL is accessible
-3. Check Do Not Disturb is OFF
-4. Verify doorbell trigger stays ON long enough
-
-### Silence Button Not Working
-
-1. Ensure `url_3` is set to `silence-{{ this.entity_id }}`
-2. Check automation trace for the silence trigger
-3. Verify automation entity_id matches
-
-### Debug Mode
-
-Enable **Debug Mode** in the blueprint settings to log detailed information to the logbook:
-
-1. Go to **Settings** → **Automations**
-2. Edit your doorbell automation
-3. Enable **Debug Mode**
-4. Trigger the doorbell
-5. Check **Logbook** for "Doorbell Notification" entries
-
----
-
-## Examples
-
-### Basic Setup (Mobile Only)
-```yaml
-automation:
-  - alias: "Doorbell Notification"
-    use_blueprint:
-      path: doorbell_notification.yaml
+blueprint:
+  name: Doorbell Notification
+  description: |
+    ## Doorbell Notification System
+
+    A comprehensive notification system for doorbell events with support for:
+    - Mobile device notifications (single device or groups)
+    - TV notifications  
+    - Smart assistant announcements
+    - Tablet display (Fully Kiosk)
+    - Ringtone playback
+    - Do Not Disturb mode
+    - Volume control based on time of day
+    - Silence notifications via action button
+    - Custom actions
+
+    ### Required:
+    - An input_boolean to trigger the doorbell event
+
+    ### Optional:
+    - Mobile devices running HA Companion App
+    - Android/Fire TV for notifications
+    - Fully Kiosk tablet
+    - Smart speakers for announcements
+
+  domain: automation
+  input:
+    # Required
+    doorbell_trigger:
+      name: Doorbell Trigger
+      description: Input boolean that triggers when doorbell is pressed
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
+
+    # Mobile Notifications
+    mobile_notifications:
+      name: |
+        # Mobile Notifications
+      description: Configure mobile device notifications
+      icon: mdi:cellphone
+      collapsed: true
       input:
-        doorbell_trigger: input_boolean.doorbell_calling
-        notify_device: abc123def456  # Your device ID
-        base_url: "https://home.example.com"
-```
+        notify_device:
+          name: Mobile Device
+          description: |
+            Select a device that runs the official Home Assistant app to receive notifications.
+            If you wish to notify a group of devices, use the field below to override this selection.
+            This will be ignored if a group is set but is still required.
+          default: false
+          selector:
+            device:
+              filter:
+                integration: mobile_app
+        notify_group:
+          name: Notification Group (Optional)
+          description: |
+            The name of the notification group to send notifications to.
+            If set, this will override the individual device above.
+            Examples: notify.all_phones, notify.mobile_app_my_phone, all_phones
+          default: ""
+        base_url:
+          name: Base URL (Optional)
+          description: |
+            The external URL for your Home Assistant instance.
+            Required for images in notifications on Android.
+            Examples: http://192.168.1.25:8123 or https://home.mydomain.com
+          default: ""
+        doorbell_path:
+          name: Doorbell Dashboard Path
+          description: Path to the doorbell dashboard/view
+          default: /lovelace/doorbell
 
-### Full Setup (All Features)
-```yaml
-automation:
-  - alias: "Doorbell Notification - Full"
-    use_blueprint:
-      path: doorbell_notification.yaml
+    notification_content:
+      name: |
+        # Notification Content
+      description: Customize notification text and appearance
+      icon: mdi:bell
+      collapsed: true
       input:
-        # Required
-        doorbell_trigger: input_boolean.doorbell_calling
-        
-        # Mobile
-        notify_device: abc123def456
-        notify_group: notify.all_phones
-        base_url: "https://home.example.com"
-        doorbell_path: /lovelace/doorbell
-        
-        # Content
-        title: "🔔 Doorbell"
-        message: "Someone is at the front door"
-        color: "#ff9800"
-        
-        # Behavior
-        critical: "{{ is_state('sun.sun', 'below_horizon') }}"
-        sticky: true
-        notification_timeout: 120
-        
-        # Camera
-        camera_entity: camera.doorbell
-        ios_live_view: camera.doorbell
-        
-        # TV
-        tv_enabled: true
-        tv_notify_service: notify.living_room_tv
-        tv_duration: 20
-        
-        # Assistant
-        assistant_enabled: true
-        assistant_notify_service: notify.alexa_media
-        assistant_message: "Someone is at the front door"
-        
-        # Tablet
-        tablet_enabled: true
-        tablet_device: xyz789
-        tablet_screen_switch: switch.tablet_screen
-        
-        # Volume
-        volume_enabled: true
+        title:
+          name: Notification Title
+          default: "Doorbell"
+        message:
+          name: Notification Message
+          description: |
+            The message of the notification.
+            You can use templates, e.g., Someone rang at {{ now().strftime('%H:%M') }}
+          default: "Someone rang the doorbell, please answer."
+          selector:
+            select:
+              options:
+                - label: "Default"
+                  value: "Someone rang the doorbell, please answer."
+                - label: "With timestamp"
+                  value: "Someone rang the doorbell at {{ now().strftime('%H:%M') }}."
+                - label: "Short"
+                  value: "Doorbell!"
+              custom_value: true
+        subtitle:
+          name: Subtitle (Optional)
+          description: A secondary heading for notifications (iOS/Android)
+          default: ""
+        color:
+          name: Notification Color (Android/TV)
+          default: "#ff9800"
+          selector:
+            select:
+              options:
+                - label: Orange
+                  value: "#ff9800"
+                - label: Red
+                  value: "#f44336"
+                - label: Blue
+                  value: "#2196f3"
+                - label: Green
+                  value: "#4caf50"
+                - label: Amber
+                  value: "#ffc107"
+                - label: Cyan
+                  value: "#00bcd4"
+                - label: Teal
+                  value: "#009688"
+              custom_value: true
+        icon:
+          name: Notification Icon (Android)
+          default: mdi:doorbell
+          selector:
+            select:
+              options:
+                - mdi:doorbell
+                - mdi:doorbell-video
+                - mdi:bell-ring
+                - mdi:home
+              custom_value: true
+        group:
+          name: Notification Group
+          description: Group name for notification stacking on mobile devices
+          default: "doorbell-notification"
+
+    notification_media:
+      name: |
+        # Notification Media
+      description: Configure camera snapshots and attachments
+      icon: mdi:camera
+      collapsed: true
+      input:
+        camera_entity:
+          name: Camera Entity (Optional)
+          description: Camera entity for snapshot in notification
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: camera
+        camera_snapshot_url:
+          name: Camera Snapshot URL (Optional)
+          description: |
+            Direct URL to camera snapshot. Overrides camera entity if set.
+            Example: http://192.168.1.100:1984/api/frame.jpeg?src=doorbell
+          default: ""
+        ios_live_view:
+          name: Live View Entity - iOS only (Optional)
+          description: Attach a live view from the selected camera to the notification
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: camera
+
+    notification_behavior:
+      name: |
+        # Notification Behavior
+      description: Configure notification sounds, alerts, and behavior
+      icon: mdi:bell-cog
+      collapsed: true
+      input:
+        critical:
+          name: Critical Notification
+          description: |
+            Send as a critical notification (bypasses silent/DND modes).
+            Can be a template that evaluates to true/false.
+          default: "false"
+          selector:
+            select:
+              options:
+                - "false"
+                - "true"
+                - "{{ is_state('input_boolean.doorbell_critical', 'on') }}"
+                - "{{'true' if now().hour >= 22 or now().hour < 7 else 'false'}}"
+                - "{{'true' if is_state('sun.sun', 'below_horizon') else 'false'}}"
+              custom_value: true
+        alert_once:
+          name: Alert Once
+          description: Only the first notification plays a sound. Updates are silent.
+          default: false
+          selector:
+            boolean:
+        sound:
+          name: Notification Sound - iOS only
+          description: Sound file for notifications. Use 'default' or 'none', or a custom sound file name.
+          default: default
+          selector:
+            select:
+              options:
+                - default
+                - none
+              custom_value: true
+        volume:
+          name: Sound Volume - iOS only
+          description: Volume level for notification sound (0-100)
+          default: 100
+          selector:
+            number:
+              min: 0
+              max: 100
+              unit_of_measurement: "%"
+        channel:
+          name: Notification Channel - Android only
+          description: Custom notification channel for sound/vibration settings
+          default: doorbell
+        vibration_pattern:
+          name: Vibration Pattern - Android only
+          default: "1000, 100, 1000, 100, 1000"
+        sticky:
+          name: Sticky Notification - Android only
+          description: Notification stays after tapping until manually cleared
+          default: true
+          selector:
+            boolean:
+        android_auto:
+          name: Android Auto
+          description: Show notification on Android Auto when connected
+          default: false
+          selector:
+            boolean:
+        notification_timeout:
+          name: Notification Timeout
+          description: Seconds until notification auto-dismisses (0 = never)
+          default: 120
+          selector:
+            number:
+              min: 0
+              max: 600
+              unit_of_measurement: seconds
+
+    action_buttons:
+      name: |
+        # Action Buttons
+      description: Configure notification action buttons
+      icon: mdi:gesture-tap-button
+      collapsed: true
+      input:
+        tap_action:
+          name: Tap Action URL
+          description: URL to open when tapping the notification
+          default: /lovelace/doorbell
+          selector:
+            select:
+              options:
+                - label: Open Doorbell View (app)
+                  value: /lovelace/doorbell
+                - label: Open Home Assistant (app)
+                  value: /lovelace
+                - label: Open Home Assistant (web)
+                  value: "{{base_url}}/lovelace"
+              custom_value: true
+        button_1:
+          name: Button 1 Text
+          default: "Answer"
+        url_1:
+          name: Button 1 URL
+          default: /lovelace/doorbell
+          selector:
+            select:
+              options:
+                - label: Open Doorbell View
+                  value: /lovelace/doorbell
+                - label: Open Home Assistant
+                  value: /lovelace
+              custom_value: true
+        icon_1:
+          name: Button 1 Icon - iOS only
+          description: iOS SFSymbols icon (e.g., sfsymbols:video)
+          default: ""
+        button_2:
+          name: Button 2 Text
+          default: "Ignore"
+        url_2:
+          name: Button 2 URL
+          default: "dismiss-{{ this.entity_id }}"
+          selector:
+            select:
+              options:
+                - label: Dismiss
+                  value: "dismiss-{{ this.entity_id }}"
+                - label: Open Doorbell View
+                  value: /lovelace/doorbell
+              custom_value: true
+        icon_2:
+          name: Button 2 Icon - iOS only
+          default: ""
+        button_3:
+          name: Button 3 Text
+          default: "Silence 30min"
+        url_3:
+          name: Button 3 URL
+          default: "silence-{{ this.entity_id }}"
+          selector:
+            select:
+              options:
+                - label: Silence Notifications
+                  value: "silence-{{ this.entity_id }}"
+                - label: Open Doorbell View
+                  value: /lovelace/doorbell
+              custom_value: true
+        icon_3:
+          name: Button 3 Icon - iOS only
+          default: ""
+
+    # TV Notifications
+    tv_notifications:
+      name: |
+        # TV Notifications
+      description: Configure TV notifications
+      icon: mdi:television
+      collapsed: true
+      input:
+        tv_enabled:
+          name: Enable TV Notifications
+          default: false
+          selector:
+            boolean:
+        tv_notify_service:
+          name: TV Notification Service
+          description: |
+            The notification service for your TV.
+            Examples: notify.living_room_tv, notify.all_tvs
+          default: ""
+        tv_position:
+          name: TV Notification Position
+          default: center
+          selector:
+            select:
+              options:
+                - center
+                - top-right
+                - top-left
+                - bottom-right
+                - bottom-left
+        tv_size:
+          name: TV Notification Size
+          default: large
+          selector:
+            select:
+              options:
+                - small
+                - medium
+                - large
+                - max
+        tv_duration:
+          name: TV Notification Duration
+          default: 15
+          selector:
+            number:
+              min: 5
+              max: 60
+              unit_of_measurement: seconds
+        tv_transparency:
+          name: TV Notification Transparency
+          default: "0%"
+          selector:
+            select:
+              options:
+                - "0%"
+                - "25%"
+                - "50%"
+                - "75%"
+        tv_interrupt:
+          name: TV Interrupt
+          description: Make notification interactive (may pause playback)
+          default: false
+          selector:
+            boolean:
+
+    # Assistant Announcements
+    assistant_notifications:
+      name: |
+        # Assistant Announcements
+      description: Configure smart assistant announcements
+      icon: mdi:google-assistant
+      collapsed: true
+      input:
+        assistant_enabled:
+          name: Enable Assistant Announcements
+          default: false
+          selector:
+            boolean:
+        assistant_notify_service:
+          name: Assistant Notification Service
+          description: |
+            The notification service for your assistants.
+            Examples: notify.alexa_media, notify.google_assistant
+          default: ""
+        assistant_message:
+          name: Assistant Message
+          default: Someone rang the doorbell, please answer.
+
+    # Tablet Display
+    tablet_settings:
+      name: |
+        # Tablet Display
+      description: Configure Fully Kiosk tablet display
+      icon: mdi:tablet
+      collapsed: true
+      input:
+        tablet_enabled:
+          name: Enable Tablet Display
+          default: false
+          selector:
+            boolean:
+        tablet_device:
+          name: Tablet Device (Fully Kiosk)
+          description: Select your Fully Kiosk tablet device
+          default: ""
+          selector:
+            device:
+              filter:
+                integration: fully_kiosk
+        tablet_screen_switch:
+          name: Tablet Screen Switch (Optional)
+          description: Switch entity to turn on tablet screen
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: switch
+
+    # Volume Control
+    volume_settings:
+      name: |
+        # Volume Control
+      description: Adjust media player volume when doorbell rings
+      icon: mdi:volume-high
+      collapsed: true
+      input:
+        volume_enabled:
+          name: Enable Volume Control
+          default: false
+          selector:
+            boolean:
         volume_media_players:
-          - media_player.kitchen_speaker
-          - media_player.living_room_speaker
-        volume_day: 0.7
-        volume_night: 0.5
-        
+          name: Media Players
+          description: Media players to adjust volume on
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: media_player
+              multiple: true
+        volume_day:
+          name: Daytime Volume
+          description: Volume when sun is above horizon
+          default: 0.75
+          selector:
+            number:
+              min: 0
+              max: 1
+              step: 0.05
+              mode: slider
+        volume_night:
+          name: Nighttime Volume
+          description: Volume when sun is below horizon
+          default: 0.6
+          selector:
+            number:
+              min: 0
+              max: 1
+              step: 0.05
+              mode: slider
+
+    # Ringtone
+    ringtone_settings:
+      name: |
         # Ringtone
-        ringtone_enabled: true
-        ringtone_media_player: media_player.kitchen_tablet
-        ringtone_url: "http://homeassistant.local:8123/local/sounds/doorbell.mp3"
-        ringtone_max_plays: 5
-        ringtone_interval: 4
-        
-        # Filters
-        do_not_disturb: input_boolean.do_not_disturb
+      description: Play ringtone on a media player
+      icon: mdi:music
+      collapsed: true
+      input:
+        ringtone_enabled:
+          name: Enable Ringtone
+          default: false
+          selector:
+            boolean:
+        ringtone_media_player:
+          name: Ringtone Media Player
+          description: Media player to play ringtone on
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: media_player
+        ringtone_url:
+          name: Ringtone URL
+          description: URL to the ringtone audio file
+          default: ""
+        ringtone_max_plays:
+          name: Maximum Ringtone Plays
+          default: 6
+          selector:
+            number:
+              min: 1
+              max: 20
+        ringtone_interval:
+          name: Ringtone Interval
+          description: Seconds between ringtone plays
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 30
+              unit_of_measurement: seconds
+
+    # Filters & Timers
+    filters:
+      name: |
+        # Filters & Conditions
+      description: Control when notifications are sent
+      icon: mdi:filter
+      collapsed: true
+      input:
+        do_not_disturb:
+          name: Do Not Disturb Entity (Optional)
+          description: |
+            Input boolean for do not disturb mode.
+            When ON, ringtone will not play (notifications still sent).
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: input_boolean
         presence_filter:
-          - person.john
-          - person.jane
-        cooldown: 20
-        silence_timer: 30
-        
+          name: Presence Filter (Optional)
+          description: Only notify if ALL selected entities are not "home"
+          default: []
+          selector:
+            entity:
+              filter:
+                domain:
+                  - device_tracker
+                  - person
+              multiple: true
+        state_filter_enabled:
+          name: State Filter on/off
+          description: Enable state-based filtering below
+          default: false
+          selector:
+            boolean:
+        state_filter_entity:
+          name: State Filter Entity
+          description: Only notify if this entity is in the specified states
+          default: ""
+          selector:
+            entity:
+        state_filter_states:
+          name: State Filter States
+          description: States the entity must be in to allow notifications
+          default: []
+          selector:
+            select:
+              options: []
+              multiple: true
+              custom_value: true
+        time_filter:
+          name: Disable During Hours
+          description: Prevent notifications during these hours
+          default: []
+          selector:
+            select:
+              multiple: true
+              options:
+                - label: "00:00 - 00:59"
+                  value: "0"
+                - label: "01:00 - 01:59"
+                  value: "1"
+                - label: "02:00 - 02:59"
+                  value: "2"
+                - label: "03:00 - 03:59"
+                  value: "3"
+                - label: "04:00 - 04:59"
+                  value: "4"
+                - label: "05:00 - 05:59"
+                  value: "5"
+                - label: "06:00 - 06:59"
+                  value: "6"
+                - label: "07:00 - 07:59"
+                  value: "7"
+                - label: "08:00 - 08:59"
+                  value: "8"
+                - label: "09:00 - 09:59"
+                  value: "9"
+                - label: "10:00 - 10:59"
+                  value: "10"
+                - label: "11:00 - 11:59"
+                  value: "11"
+                - label: "12:00 - 12:59"
+                  value: "12"
+                - label: "13:00 - 13:59"
+                  value: "13"
+                - label: "14:00 - 14:59"
+                  value: "14"
+                - label: "15:00 - 15:59"
+                  value: "15"
+                - label: "16:00 - 16:59"
+                  value: "16"
+                - label: "17:00 - 17:59"
+                  value: "17"
+                - label: "18:00 - 18:59"
+                  value: "18"
+                - label: "19:00 - 19:59"
+                  value: "19"
+                - label: "20:00 - 20:59"
+                  value: "20"
+                - label: "21:00 - 21:59"
+                  value: "21"
+                - label: "22:00 - 22:59"
+                  value: "22"
+                - label: "23:00 - 23:59"
+                  value: "23"
+        cooldown:
+          name: Cooldown Period
+          description: Minimum seconds between doorbell triggers (prevents spam)
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 300
+              unit_of_measurement: seconds
+        silence_timer:
+          name: Silence Timer
+          description: Minutes to silence notifications when "Silence" button is pressed
+          default: 30
+          selector:
+            number:
+              min: 1
+              max: 180
+              unit_of_measurement: minutes
+        initial_delay:
+          name: Initial Delay
+          description: Seconds to wait before playing ringtone
+          default: 5
+          selector:
+            number:
+              min: 0
+              max: 30
+              unit_of_measurement: seconds
+
+    # Custom Actions
+    custom_actions:
+      name: |
         # Custom Actions
+      description: Run custom automations on doorbell events
+      icon: mdi:cog
+      collapsed: true
+      input:
         custom_action_auto:
-          - service: light.turn_on
+          name: Custom Action (Auto)
+          description: Action to run automatically when doorbell rings (after filters pass)
+          default: []
+          selector:
+            action: {}
+        custom_action_manual:
+          name: Custom Action (Manual)
+          description: Action to run when custom action button is pressed (set button URL to custom-{{ this.entity_id }})
+          default: []
+          selector:
+            action: {}
+
+    # Debug
+    debug_settings:
+      name: |
+        # Debug
+      description: Debugging options
+      icon: mdi:bug
+      collapsed: true
+      input:
+        debug:
+          name: Debug Mode
+          description: Log debug messages to the logbook
+          default: false
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input doorbell_trigger
+    to: "on"
+    id: doorbell
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "silence-{{ this.entity_id }}"
+    id: silence
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "dismiss-{{ this.entity_id }}"
+    id: dismiss
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "custom-{{ this.entity_id }}"
+    id: custom
+
+variables:
+  # Inputs
+  doorbell_trigger: !input doorbell_trigger
+  
+  # Mobile notification variables
+  input_base_url: !input base_url
+  base_url: "{{ input_base_url.rstrip('/') if input_base_url else '' }}"
+  doorbell_path: !input doorbell_path
+  notify_group: !input notify_group
+  notify_group_target: "{{ notify_group | lower | regex_replace('^notify\\.', '') | replace(' ','_') if notify_group else '' }}"
+  
+  # Content
+  title: !input title
+  message: !input message
+  subtitle: !input subtitle
+  color: !input color
+  icon: !input icon
+  group: !input group
+  
+  # Media
+  camera_entity: !input camera_entity
+  camera_snapshot_url: !input camera_snapshot_url
+  ios_live_view: !input ios_live_view
+  camera_image: >-
+    {% if camera_snapshot_url %}
+      {{ camera_snapshot_url }}
+    {% elif camera_entity %}
+      {{ base_url }}/api/camera_proxy/{{ camera_entity }}
+    {% else %}
+      
+    {% endif %}
+  
+  # Behavior
+  critical_input: !input critical
+  critical: "{{ true if critical_input == 'true' else true if critical_input == True else false }}"
+  alert_once: !input alert_once
+  sound: !input sound
+  input_volume: !input volume
+  volume: "{{ input_volume / 100 }}"
+  channel: !input channel
+  vibration_pattern: !input vibration_pattern
+  sticky: !input sticky
+  android_auto: !input android_auto
+  notification_timeout: !input notification_timeout
+  
+  # Action buttons
+  tap_action: !input tap_action
+  button_1: !input button_1
+  url_1: !input url_1
+  icon_1: !input icon_1
+  button_2: !input button_2
+  url_2: !input url_2
+  icon_2: !input icon_2
+  button_3: !input button_3
+  url_3: !input url_3
+  icon_3: !input icon_3
+  
+  # TV variables
+  tv_enabled: !input tv_enabled
+  tv_notify_service: !input tv_notify_service
+  tv_notify_target: "{{ tv_notify_service | lower | regex_replace('^notify\\.', '') | replace(' ','_') if tv_notify_service else '' }}"
+  tv_position: !input tv_position
+  tv_size: !input tv_size
+  tv_duration: !input tv_duration
+  tv_transparency: !input tv_transparency
+  tv_interrupt: !input tv_interrupt
+  
+  # Assistant variables
+  assistant_enabled: !input assistant_enabled
+  assistant_notify_service: !input assistant_notify_service
+  assistant_notify_target: "{{ assistant_notify_service | lower | regex_replace('^notify\\.', '') | replace(' ','_') if assistant_notify_service else '' }}"
+  assistant_message: !input assistant_message
+  
+  # Tablet variables
+  tablet_enabled: !input tablet_enabled
+  tablet_device: !input tablet_device
+  tablet_screen_switch: !input tablet_screen_switch
+  
+  # Volume variables
+  volume_enabled: !input volume_enabled
+  volume_media_players: !input volume_media_players
+  volume_day: !input volume_day
+  volume_night: !input volume_night
+  
+  # Ringtone variables
+  ringtone_enabled: !input ringtone_enabled
+  ringtone_media_player: !input ringtone_media_player
+  ringtone_url: !input ringtone_url
+  ringtone_max_plays: !input ringtone_max_plays
+  ringtone_interval: !input ringtone_interval
+  
+  # Filter variables
+  do_not_disturb: !input do_not_disturb
+  presence_filter: !input presence_filter
+  time_filter: !input time_filter
+  state_filter_enabled: !input state_filter_enabled
+  state_filter_entity: !input state_filter_entity
+  state_filter_states: !input state_filter_states
+  cooldown: !input cooldown
+  silence_timer: !input silence_timer
+  initial_delay: !input initial_delay
+  
+  # Debug
+  debug: !input debug
+  
+  # Computed states
+  dnd_active: "{{ do_not_disturb != '' and is_state(do_not_disturb, 'on') }}"
+  presence_home: "{{ presence_filter | length > 0 and presence_filter | expand | selectattr('state', 'eq', 'home') | list | length > 0 }}"
+  state_satisfied: "{{ not state_filter_enabled or (state_filter_entity and states(state_filter_entity) | lower in (state_filter_states | lower)) }}"
+  
+  # Unique tag for this event
+  notification_tag: "doorbell-{{ now().timestamp() | int }}"
+
+conditions:
+  - condition: or
+    conditions:
+      - condition: trigger
+        id: silence
+      - condition: trigger
+        id: dismiss
+      - condition: trigger
+        id: custom
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: doorbell
+          - alias: "Cooldown check"
+            condition: template
+            value_template: "{{ not this.attributes.last_triggered or (now() - this.attributes.last_triggered).seconds > cooldown }}"
+          - alias: "Time filter"
+            condition: template
+            value_template: "{{ not time_filter | length or now().hour | string not in time_filter }}"
+          - alias: "Presence filter"
+            condition: template
+            value_template: "{{ not presence_home }}"
+          - alias: "State filter"
+            condition: template
+            value_template: "{{ state_satisfied }}"
+
+actions:
+  - choose:
+      # Silence notifications
+      - alias: "Silence Notifications"
+        conditions:
+          - condition: trigger
+            id: silence
+        sequence:
+          - action: automation.turn_off
             target:
-              entity_id: light.porch
+              entity_id: "{{ this.entity_id }}"
             data:
-              brightness_pct: 100
-```
+              stop_actions: false
+          - delay:
+              minutes: !input silence_timer
+          - action: automation.turn_on
+            target:
+              entity_id: "{{ this.entity_id }}"
 
-### Night Mode with Critical Alerts
-```yaml
-automation:
-  - alias: "Doorbell Notification - Night Critical"
-    use_blueprint:
-      path: doorbell_notification.yaml
-      input:
-        doorbell_trigger: input_boolean.doorbell_calling
-        notify_device: abc123def456
-        base_url: "https://home.example.com"
-        
-        # Critical at night
-        critical: "{{'true' if now().hour >= 22 or now().hour < 7 else 'false'}}"
-        
-        # Louder at night
-        volume: 100
-        sound: default
-```
+      # Dismiss - just clear the notification (no action needed, notification handles it)
+      - alias: "Dismiss Notification"
+        conditions:
+          - condition: trigger
+            id: dismiss
+        sequence: []
 
-### Away Mode Only
-```yaml
-automation:
-  - alias: "Doorbell Notification - Away Only"
-    use_blueprint:
-      path: doorbell_notification.yaml
-      input:
-        doorbell_trigger: input_boolean.doorbell_calling
-        notify_device: abc123def456
-        base_url: "https://home.example.com"
-        
-        # Only notify when everyone is away
-        presence_filter:
-          - person.john
-          - person.jane
-          - person.kids
-        
-        # Disable ringtone (no one home to hear it)
-        ringtone_enabled: false
-```
+      # Custom action
+      - alias: "Custom Action Manual"
+        conditions:
+          - condition: trigger
+            id: custom
+        sequence: !input custom_action_manual
 
----
+      # Main doorbell event
+      - alias: "Doorbell Event"
+        conditions:
+          - condition: trigger
+            id: doorbell
+        sequence:
+          # Debug logging
+          - alias: "Debug: Initial Output"
+            choose:
+              - conditions: "{{ debug }}"
+                sequence:
+                  - action: logbook.log
+                    data:
+                      name: Doorbell Notification
+                      message: |
+                        DEBUG:
+                          Trigger: doorbell
+                          Config:
+                            Base URL: {{ base_url if base_url else 'Not set' }}
+                            Target: {{ 'Group: ' + notify_group if notify_group else 'Single Device' }}
+                            Critical: {{ critical }}
+                            Alert Once: {{ alert_once }}
+                            Camera Image: {{ camera_image if camera_image else 'None' }}
+                          Filters:
+                            DND Active: {{ dnd_active }}
+                            Presence Home: {{ presence_home }}
+                            State Satisfied: {{ state_satisfied }}
+                            Time Filter: {{ time_filter }}
+                          Features:
+                            Tablet: {{ tablet_enabled }}
+                            TV: {{ tv_enabled }}
+                            Assistant: {{ assistant_enabled }}
+                            Ringtone: {{ ringtone_enabled }}
+                            Volume Control: {{ volume_enabled }}
 
-## Support
+          # Load tablet URL if enabled
+          - if:
+              - "{{ tablet_enabled and tablet_device }}"
+            then:
+              - action: fully_kiosk.load_url
+                data:
+                  url: "{{ base_url }}{{ doorbell_path }}"
+                target:
+                  device_id: "{{ tablet_device }}"
+                continue_on_error: true
 
-- **Issues:** [GitHub Issues](https://github.com/YOUR_REPO/issues)
-- **Discussions:** [Home Assistant Community](https://community.home-assistant.io/)
+          # Turn on tablet screen if configured
+          - if:
+              - "{{ tablet_screen_switch != '' }}"
+            then:
+              - action: switch.turn_on
+                target:
+                  entity_id: "{{ tablet_screen_switch }}"
+                continue_on_error: true
 
----
+          # Volume control
+          - if:
+              - "{{ volume_enabled and volume_media_players | length > 0 }}"
+            then:
+              - action: media_player.volume_set
+                data:
+                  volume_level: "{{ volume_night if is_state('sun.sun', 'below_horizon') else volume_day }}"
+                target:
+                  entity_id: "{{ volume_media_players }}"
+                continue_on_error: true
 
-## License
+          # Custom auto action
+          - alias: "Custom Action Auto"
+            choose:
+              - conditions: "{{ true }}"
+                sequence: !input custom_action_auto
 
-MIT License - Feel free to use, modify, and distribute.
+          # Send notifications in parallel
+          - parallel:
+              # Mobile notification
+              - sequence:
+                  - choose:
+                      # Use notification group
+                      - conditions: "{{ notify_group_target != '' }}"
+                        sequence:
+                          - action: "notify.{{ notify_group_target }}"
+                            data:
+                              title: "{{ title }}"
+                              message: "{{ message }}"
+                              data:
+                                tag: "{{ notification_tag }}"
+                                group: "{{ group }}"
+                                color: "{{ color }}"
+                                # Android
+                                subject: "{{ subtitle }}"
+                                image: "{{ camera_image if camera_image else omit }}"
+                                clickAction: "{{ tap_action }}"
+                                ttl: 0
+                                priority: high
+                                notification_icon: "{{ icon }}"
+                                sticky: "{{ sticky }}"
+                                channel: "{{ 'alarm_stream' if critical else channel }}"
+                                vibrationPattern: "{{ vibration_pattern }}"
+                                persistent: true
+                                timeout: "{{ notification_timeout }}"
+                                car_ui: "{{ android_auto }}"
+                                # iOS
+                                subtitle: "{{ subtitle }}"
+                                url: "{{ tap_action }}"
+                                attachment:
+                                  url: "{{ camera_image }}"
+                                push:
+                                  sound:
+                                    name: "{{ sound }}"
+                                    volume: "{{ volume }}"
+                                    critical: "{{ 1 if critical else 0 }}"
+                                entity_id: "{{ ios_live_view if ios_live_view else omit }}"
+                                # Actions
+                                actions:
+                                  - action: URI
+                                    title: "{{ button_1 }}"
+                                    uri: "{{ url_1 }}"
+                                    icon: "{{ icon_1 }}"
+                                  - action: "{{ 'URI' if '/' in url_2 else url_2 }}"
+                                    title: "{{ button_2 }}"
+                                    uri: "{{ url_2 }}"
+                                    icon: "{{ icon_2 }}"
+                                  - action: "{{ 'URI' if '/' in url_3 else url_3 }}"
+                                    title: "{{ button_3 }}"
+                                    uri: "{{ url_3 }}"
+                                    icon: "{{ icon_3 }}"
+                                    destructive: true
+                            continue_on_error: true
+                    # Use single device
+                    default:
+                      - device_id: !input notify_device
+                        domain: mobile_app
+                        type: notify
+                        title: "{{ title }}"
+                        message: "{{ message }}"
+                        data:
+                          tag: "{{ notification_tag }}"
+                          group: "{{ group }}"
+                          color: "{{ color }}"
+                          # Android
+                          subject: "{{ subtitle }}"
+                          image: "{{ camera_image if camera_image else omit }}"
+                          clickAction: "{{ tap_action }}"
+                          ttl: 0
+                          priority: high
+                          notification_icon: "{{ icon }}"
+                          sticky: "{{ sticky }}"
+                          channel: "{{ 'alarm_stream' if critical else channel }}"
+                          vibrationPattern: "{{ vibration_pattern }}"
+                          persistent: true
+                          timeout: "{{ notification_timeout }}"
+                          car_ui: "{{ android_auto }}"
+                          # iOS
+                          subtitle: "{{ subtitle }}"
+                          url: "{{ tap_action }}"
+                          attachment:
+                            url: "{{ camera_image }}"
+                          push:
+                            sound:
+                              name: "{{ sound }}"
+                              volume: "{{ volume }}"
+                              critical: "{{ 1 if critical else 0 }}"
+                          entity_id: "{{ ios_live_view if ios_live_view else omit }}"
+                          # Actions
+                          actions:
+                            - action: URI
+                              title: "{{ button_1 }}"
+                              uri: "{{ url_1 }}"
+                              icon: "{{ icon_1 }}"
+                            - action: "{{ 'URI' if '/' in url_2 else url_2 }}"
+                              title: "{{ button_2 }}"
+                              uri: "{{ url_2 }}"
+                              icon: "{{ icon_2 }}"
+                            - action: "{{ 'URI' if '/' in url_3 else url_3 }}"
+                              title: "{{ button_3 }}"
+                              uri: "{{ url_3 }}"
+                              icon: "{{ icon_3 }}"
+                              destructive: true
 
----
+              # TV notification
+              - if:
+                  - "{{ tv_enabled and tv_notify_target != '' }}"
+                then:
+                  - action: "notify.{{ tv_notify_target }}"
+                    data:
+                      title: "{{ title }}"
+                      message: "{{ message }}"
+                      data:
+                        image:
+                          url: "{{ camera_image }}"
+                        fontsize: "{{ tv_size }}"
+                        position: "{{ tv_position }}"
+                        duration: "{{ tv_duration }}"
+                        transparency: "{{ tv_transparency }}"
+                        interrupt: "{{ tv_interrupt }}"
+                        color: "{{ color }}"
+                    continue_on_error: true
 
-## Changelog
+              # Assistant announcement
+              - if:
+                  - "{{ assistant_enabled and assistant_notify_target != '' }}"
+                then:
+                  - action: "notify.{{ assistant_notify_target }}"
+                    data:
+                      message: "{{ assistant_message }}"
+                    continue_on_error: true
 
-### v1.0.0
-- Initial release
-- Mobile, TV, Assistant, Tablet support
-- Ringtone playback with loop
-- Do Not Disturb mode
-- Silence via notification button
-- Full iOS and Android support
-- Debug mode
+          # Initial delay before ringtone
+          - delay:
+              seconds: "{{ initial_delay }}"
+
+          # Ringtone loop (respects DND)
+          - if:
+              - "{{ ringtone_enabled and ringtone_media_player != '' and ringtone_url != '' and not dnd_active }}"
+            then:
+              - repeat:
+                  while:
+                    - condition: state
+                      entity_id: !input doorbell_trigger
+                      state: "on"
+                    - condition: template
+                      value_template: "{{ repeat.index <= ringtone_max_plays }}"
+                  sequence:
+                    - action: media_player.play_media
+                      data:
+                        media_content_id: "{{ ringtone_url }}"
+                        media_content_type: audio/mp3
+                      target:
+                        entity_id: "{{ ringtone_media_player }}"
+                      continue_on_error: true
+                    - delay:
+                        seconds: "{{ ringtone_interval }}"
+
+          # Reset doorbell trigger
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input doorbell_trigger
